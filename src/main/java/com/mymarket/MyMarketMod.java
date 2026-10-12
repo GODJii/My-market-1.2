@@ -13,7 +13,7 @@ public class MyMarketMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		// Build the price list every time a world/server starts.
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> Prices.reload());
+		ServerLifecycleEvents.SERVER_STARTING.register(Prices::reload);
 		Net.init();
 		// Register /sell /shop /buy /money /balance /price
 		CommandRegistrationCallback.EVENT.register(MarketCommands::register);

@@ -82,10 +82,10 @@ public final class MarketCommands {
 			p.sendSystemMessage(Component.literal("This item cannot be bought or sold").withStyle(ChatFormatting.RED));
 			return 0;
 		}
-		Prices.Tier t = Prices.tierOf(stack.getItem());
+		Prices.Tier t = Prices.tierOfPrice(Prices.baseValue(stack));
 		p.sendSystemMessage(stack.getHoverName().copy().withStyle(t.color)
 				.append(Component.literal("  [" + t.label + "]  Sell $" + Ui.money(unit)
-						+ " | Buy $" + Ui.money(Prices.buyPrice(stack.getItem()))).withStyle(ChatFormatting.YELLOW)));
+						+ " | Buy $" + Ui.money(Prices.buyPrice(Prices.baseValue(stack)))).withStyle(ChatFormatting.YELLOW)));
 		return 1;
 	}
 }

@@ -1,5 +1,6 @@
 package com.mymarket;
 
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -44,13 +45,19 @@ public class BuyMenu extends ChestMenu {
 	private final ServerPlayer player;
 	private final SimpleContainer top;
 	private final State st;
-	private List<Item> view = List.of();
+	private List<Prices.Entry> view = List.of();
+	private final boolean hasMod;
 
 	private BuyMenu(int syncId, Inventory inv, SimpleContainer top, ServerPlayer player, State st) {
 		super(MenuType.GENERIC_9x6, syncId, inv, top, 6);
 		this.player = player;
 		this.top = top;
 		this.st = st;
+		this.hasMod = Net.hasClientMod(player);
+		if (hasMod) {
+			// Arrives before the window opens; the client puts it in its search box.
+			ServerPlayNetworking.send(player, new Net.PrefillPayload(st.query));
+		}
 		rebuild();
 	}
 
@@ -66,18 +73,27 @@ public class BuyMenu extends ChestMenu {
 
 	static void open(ServerPlayer player, State state) {
 		SimpleContainer top = new SimpleContainer(54);
-		String title = state.query.isEmpty() ? Net.SHOP_TITLE : Net.SHOP_TITLE + ": " + state.query;
 		player.openMenu(new SimpleMenuProvider(
 				(syncId, inv, p) -> new BuyMenu(syncId, inv, top, player, state),
-				Component.literal(title)));
+				Component.literal(Net.SHOP_TITLE)));
 	}
 
 	private long balance() {
 		return MoneyData.get(player.getServer()).get(player.getUUID());
 	}
 
-	private int amountFor(Item item) {
-		return Math.min(QTY[st.qtyIdx], item.getDefaultInstance().getMaxStackSize());
+	private int amountFor(Prices.Entry e) {
+		return Math.min(QTY[st.qtyIdx], e.stack().getMaxStackSize());
+	}
+
+	/** Called when the player types in the client's search box (live, like the creative inventory). */
+	public void setQuery(String q) {
+		q = q == null ? "" : q.trim();
+		if (q.equals(st.query)) return;
+		st.query = q;
+		st.row = 0;
+		rebuild();
+		sendAllDataToRemote();
 	}
 
 	private int totalRows() {
@@ -100,11 +116,11 @@ public class BuyMenu extends ChestMenu {
 	}
 
 	private void rebuild() {
-		List<Item> all = Prices.buyable();
+		List<Prices.Entry> all = Prices.buyable();
 		String[] tokens = st.query.isEmpty() ? new String[0] : st.query.toLowerCase(Locale.ROOT).split("\\s+");
 		Prices.Tier tier = st.tierIdx == 0 ? null : Prices.Tier.values()[st.tierIdx - 1];
 		view = all.stream()
-				.filter(i -> tier == null || Prices.tierOf(i) == tier)
+				.filter(i -> tier == null || Prices.tierOfPrice(i.sell()) == tier)
 				.filter(i -> tokens.length == 0 || Prices.matches(i, tokens))
 				.toList();
 		st.row = Math.max(0, Math.min(st.row, maxRow()));
@@ -115,10 +131,16 @@ public class BuyMenu extends ChestMenu {
 		}
 		for (int i = GRID; i < 54; i++) top.setItem(i, Ui.filler());
 
-		top.setItem(SLOT_SEARCH, Ui.button(Items.OAK_SIGN,
-				Ui.text(st.query.isEmpty() ? "Search" : "Search: " + st.query, ChatFormatting.AQUA),
-				Ui.text("Click, type a name, then click the", ChatFormatting.GRAY),
-				Ui.text("paper on the right. (or use /shop <name>)", ChatFormatting.GRAY)));
+		if (hasMod) {
+			top.setItem(SLOT_SEARCH, Ui.button(Items.OAK_SIGN,
+					Ui.text(st.query.isEmpty() ? "Search" : "Search: " + st.query, ChatFormatting.AQUA),
+					Ui.text("Type in the box at the top of this window", ChatFormatting.GRAY)));
+		} else {
+			top.setItem(SLOT_SEARCH, Ui.button(Items.OAK_SIGN,
+					Ui.text(st.query.isEmpty() ? "Search" : "Search: " + st.query, ChatFormatting.AQUA),
+					Ui.text("Click, type a name, then click the", ChatFormatting.GRAY),
+					Ui.text("paper on the right. (or use /shop <name>)", ChatFormatting.GRAY)));
+		}
 
 		String filterName = st.tierIdx == 0 ? "All" : Prices.Tier.values()[st.tierIdx - 1].label;
 		ChatFormatting filterColor = st.tierIdx == 0 ? ChatFormatting.WHITE : Prices.Tier.values()[st.tierIdx - 1].color;
@@ -151,15 +173,15 @@ public class BuyMenu extends ChestMenu {
 		}
 	}
 
-	private ItemStack display(Item item) {
-		ItemStack s = item.getDefaultInstance();
-		Prices.Tier t = Prices.tierOf(item);
+	private ItemStack display(Prices.Entry e) {
+		ItemStack s = e.stack().copy();
+		Prices.Tier t = Prices.tierOfPrice(e.sell());
 		s.set(DataComponents.LORE, new ItemLore(List.of(
 				Ui.text("Rarity: " + t.label, t.color),
-				Ui.text("Price: $" + Ui.money(Prices.buyPrice(item)) + " each", ChatFormatting.YELLOW),
-				Ui.text("Click = buy " + amountFor(item), ChatFormatting.GRAY),
+				Ui.text("Price: $" + Ui.money(Prices.buyPrice(e.sell())) + " each", ChatFormatting.YELLOW),
+				Ui.text("Click = buy " + amountFor(e), ChatFormatting.GRAY),
 				Ui.text("Right click = buy 1", ChatFormatting.GRAY),
-				Ui.text("Shift+click = buy a stack (" + item.getDefaultInstance().getMaxStackSize() + ")",
+				Ui.text("Shift+click = buy a stack (" + e.stack().getMaxStackSize() + ")",
 						ChatFormatting.GRAY))));
 		return s;
 	}
@@ -173,13 +195,16 @@ public class BuyMenu extends ChestMenu {
 			if (slotId < GRID) {
 				buy(slotId, button, shift);
 			} else if (slotId == SLOT_SEARCH) {
-				SearchMenu.open(player, st);
-				return; // a new window is opening
+				if (!hasMod) {
+					SearchMenu.open(player, st);
+					return; // a new window is opening
+				}
 			} else if (slotId == SLOT_CLEAR) {
 				st.query = "";
 				st.row = 0;
-				reopen();
-				return;
+				if (hasMod) {
+					ServerPlayNetworking.send(player, new Net.PrefillPayload("")); // clears the client's box
+				}
 			} else if (slotId == SLOT_UP) {
 				scrollBy(shift ? -5 : -1);
 			} else if (slotId == SLOT_DOWN) {
@@ -195,19 +220,14 @@ public class BuyMenu extends ChestMenu {
 		sendAllDataToRemote();
 	}
 
-	/** Re-opens the window so the title matches the new search text. */
-	private void reopen() {
-		open(player, st);
-	}
-
 	private void buy(int slotId, int button, boolean shift) {
 		int idx = st.row * COLS + slotId;
 		if (idx >= view.size()) return;
-		Item item = view.get(idx);
+		Prices.Entry entry = view.get(idx);
 
-		int stack = item.getDefaultInstance().getMaxStackSize();
-		int amount = shift ? stack : (button == 1 ? 1 : amountFor(item));
-		long unit = Prices.buyPrice(item);
+		int stack = entry.stack().getMaxStackSize();
+		int amount = shift ? stack : (button == 1 ? 1 : amountFor(entry));
+		long unit = Prices.buyPrice(entry.sell());
 		long cost = unit * amount;
 		MoneyData data = MoneyData.get(player.getServer());
 
@@ -216,7 +236,7 @@ public class BuyMenu extends ChestMenu {
 					Ui.text("Not enough money. Need $" + Ui.money(cost), ChatFormatting.RED), true);
 			return;
 		}
-		ItemStack give = new ItemStack(item, amount);
+		ItemStack give = entry.stack().copyWithCount(amount);
 		MutableComponent name = give.getHoverName().copy();
 		player.getInventory().add(give);
 		if (!give.isEmpty()) {

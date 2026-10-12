@@ -53,9 +53,50 @@ public final class Net {
 		}
 	}
 
+	/** Client -> server: the text in the search box changed. */
+	public record SearchPayload(String text) implements CustomPacketPayload {
+		public static final Type<SearchPayload> TYPE =
+				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "search"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SearchPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, SearchPayload::text, SearchPayload::new);
+
+		@Override
+		public Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	/** Server -> client, sent just before the shop opens: the text to put in the search box. */
+	public record PrefillPayload(String text) implements CustomPacketPayload {
+		public static final Type<PrefillPayload> TYPE =
+				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "prefill"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, PrefillPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, PrefillPayload::text, PrefillPayload::new);
+
+		@Override
+		public Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	/** True if this player has the mod on their client (so the shop can use the real search box). */
+	public static boolean hasClientMod(ServerPlayer p) {
+		return ServerPlayNetworking.canSend(p, PrefillPayload.TYPE);
+	}
+
 	public static void init() {
 		PayloadTypeRegistry.playS2C().register(BalancePayload.TYPE, BalancePayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(ScrollPayload.TYPE, ScrollPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(SearchPayload.TYPE, SearchPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(PrefillPayload.TYPE, PrefillPayload.CODEC);
+
+		ServerPlayNetworking.registerGlobalReceiver(SearchPayload.TYPE, (payload, context) -> {
+			ServerPlayer p = context.player();
+			if (p.containerMenu instanceof BuyMenu menu) {
+				String t = payload.text();
+				menu.setQuery(t.length() > 32 ? t.substring(0, 32) : t);
+			}
+		});
 
 		ServerPlayNetworking.registerGlobalReceiver(ScrollPayload.TYPE, (payload, context) -> {
 			ServerPlayer p = context.player();

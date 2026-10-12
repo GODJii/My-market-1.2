@@ -4,15 +4,26 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.Rarity;
+import net.minecraft.world.item.alchemy.Potion;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -48,7 +59,19 @@ public final class Prices {
 	private static final long[] TIER_PRICE = {5, 25, 300, 3_000, 40_000, 500_000};
 
 	private static final Map<Item, Long> SELL = new HashMap<>();
-	private static final List<Item> BUYABLE = new ArrayList<>();
+	/** One line in the shop. Plain items, but also every enchanted book and potion variant. */
+	public record Entry(ItemStack stack, long sell, String search) {
+		public Item item() {
+			return stack.getItem();
+		}
+	}
+
+	private static final List<Entry> ENTRIES = new ArrayList<>();
+
+	/** Sell price of a level-I book of each enchantment; higher levels multiply by 2.5 per level. */
+	private static final Map<String, Long> ENCHANT_BASE = new HashMap<>();
+	private static final long ENCHANT_DEFAULT = 10_000;
+	private static final Set<String> PLAIN_POTIONS = Set.of("water", "mundane", "thick", "awkward", "empty");
 
 	private static final Map<String, Tier> TIER_BY_ID = new HashMap<>();
 	private static final Map<String, Long> OVERRIDES = new HashMap<>();
@@ -135,13 +158,28 @@ public final class Prices {
 				price(mats[m] + "_" + pieces[i], units[i] * matPrice[m]);
 			}
 		}
+
+		// Enchanted books (sell price of level I)
+		Object[] eb = {
+				"mending", 150_000, "silk_touch", 60_000, "infinity", 60_000, "swift_sneak", 50_000,
+				"frost_walker", 40_000, "soul_speed", 40_000, "wind_burst", 30_000, "channeling", 30_000,
+				"multishot", 25_000, "riptide", 20_000, "aqua_affinity", 15_000, "flame", 15_000,
+				"fortune", 12_000, "looting", 12_000, "unbreaking", 8_000, "fire_aspect", 8_000,
+				"luck_of_the_sea", 8_000, "lure", 8_000, "breach", 8_000, "efficiency", 6_000,
+				"sharpness", 6_000, "protection", 6_000, "sweeping_edge", 6_000, "power", 6_000,
+				"depth_strider", 6_000, "loyalty", 6_000, "quick_charge", 6_000, "density", 6_000,
+				"thorns", 5_000, "impaling", 5_000, "feather_falling", 4_000, "respiration", 4_000,
+				"punch", 4_000, "piercing", 4_000, "smite", 3_000, "bane_of_arthropods", 3_000,
+				"knockback", 3_000, "fire_protection", 3_000, "blast_protection", 3_000,
+				"projectile_protection", 3_000, "binding_curse", 1_000, "vanishing_curse", 1_000};
+		for (int i = 0; i < eb.length; i += 2) ENCHANT_BASE.put((String) eb[i], ((Integer) eb[i + 1]).longValue());
 	}
 
 	// ---------------------------------------------------------------- loading
 
-	public static void reload() {
+	public static void reload(MinecraftServer server) {
 		SELL.clear();
-		BUYABLE.clear();
+		ENTRIES.clear();
 		Map<String, Long> config = loadConfig();
 
 		for (Item item : BuiltInRegistries.ITEM) {
@@ -151,12 +189,66 @@ public final class Prices {
 			if (value <= 0) continue;
 			SELL.put(item, value);
 			if (!NOT_BUYABLE.contains(path) && !UNSELLABLE.contains(path) && !path.endsWith("_spawn_egg")) {
-				BUYABLE.add(item);
+				String search = (path.replace('_', ' ') + " " + item.getDescription().getString()).toLowerCase(Locale.ROOT);
+				ENTRIES.add(new Entry(item.getDefaultInstance(), value, search));
 			}
 		}
-		BUYABLE.sort(Comparator.<Item>comparingLong(i -> SELL.get(i))
-				.thenComparing(i -> BuiltInRegistries.ITEM.getKey(i).toString()));
-		MyMarketMod.LOGGER.info("My Market: {} sellable items, {} buyable items", SELL.size(), BUYABLE.size());
+
+		// Every enchantment at every level, as its own book
+		try {
+			Registry<Enchantment> reg = server.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
+			for (Holder.Reference<Enchantment> h : reg.holders().toList()) {
+				Enchantment e = h.value();
+				String path = keyPath(h);
+				String name = e.description().getString();
+				for (int lvl = 1; lvl <= e.getMaxLevel(); lvl++) {
+					ItemStack book = EnchantedBookItem.createForEnchantment(new EnchantmentInstance(h, lvl));
+					String search = ("enchanted book enchantment " + path.replace('_', ' ') + " " + name + " level " + lvl)
+							.toLowerCase(Locale.ROOT);
+					ENTRIES.add(new Entry(book, enchantPrice(h, lvl), search));
+				}
+			}
+		} catch (RuntimeException ex) {
+			MyMarketMod.LOGGER.error("Could not add enchanted books to the shop", ex);
+		}
+
+		// Every potion type as potion / splash / lingering / tipped arrow
+		try {
+			Item[] kinds = {Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION, Items.TIPPED_ARROW};
+			for (Holder.Reference<Potion> h : BuiltInRegistries.POTION.holders().toList()) {
+				String path = keyPath(h);
+				if (PLAIN_POTIONS.contains(path)) continue;
+				for (Item kind : kinds) {
+					ItemStack st = PotionContents.createItemStack(kind, h);
+					String search = (BuiltInRegistries.ITEM.getKey(kind).getPath().replace('_', ' ') + " "
+							+ path.replace('_', ' ')).toLowerCase(Locale.ROOT);
+					ENTRIES.add(new Entry(st, potionPrice(kind, path), search));
+				}
+			}
+		} catch (RuntimeException ex) {
+			MyMarketMod.LOGGER.error("Could not add potions to the shop", ex);
+		}
+
+		ENTRIES.sort(Comparator.comparingLong(Entry::sell).thenComparing(Entry::search));
+		MyMarketMod.LOGGER.info("My Market: {} sellable items, {} shop entries", SELL.size(), ENTRIES.size());
+	}
+
+	private static String keyPath(Holder<?> h) {
+		return h.unwrapKey().map(k -> k.location().getPath()).orElse("");
+	}
+
+	private static long enchantPrice(Holder<Enchantment> h, int level) {
+		long base = ENCHANT_BASE.getOrDefault(keyPath(h), ENCHANT_DEFAULT);
+		return Math.max(1, Math.round(base * Math.pow(2.5, level - 1)));
+	}
+
+	private static long potionPrice(Item kind, String potionPath) {
+		double v = 800;
+		if (potionPath.startsWith("long_") || potionPath.startsWith("strong_")) v *= 1.8;
+		if (kind == Items.SPLASH_POTION) v *= 1.3;
+		else if (kind == Items.LINGERING_POTION) v *= 2;
+		else if (kind == Items.TIPPED_ARROW) v *= 0.2;
+		return Math.max(1, Math.round(v));
 	}
 
 	private static Map<String, Long> loadConfig() {
@@ -230,29 +322,49 @@ public final class Prices {
 		return tierOfPrice(SELL.getOrDefault(item, 0L));
 	}
 
-	/** True if every word in {@code tokens} (lower-case) appears in the item's id or display name. */
-	public static boolean matches(Item item, String[] tokens) {
-		String id = BuiltInRegistries.ITEM.getKey(item).getPath().replace('_', ' ');
-		String name = item.getDescription().getString().toLowerCase(Locale.ROOT);
+	/** True if every word in {@code tokens} (lower-case) appears in the entry's name / id / enchantment. */
+	public static boolean matches(Entry e, String[] tokens) {
 		for (String t : tokens) {
-			if (!id.contains(t) && !name.contains(t)) return false;
+			if (!e.search().contains(t)) return false;
 		}
 		return true;
 	}
 
-	public static List<Item> buyable() {
-		return BUYABLE;
+	public static List<Entry> buyable() {
+		return ENTRIES;
 	}
 
-	/** Price the player pays for one item (always higher than the sell price). */
-	public static long buyPrice(Item item) {
-		long s = SELL.getOrDefault(item, 0L);
-		return Math.max(s * 2, s + 1);
+	/** Price the player pays when the sell price is {@code sell} (always higher than the sell price). */
+	public static long buyPrice(long sell) {
+		return Math.max(sell * 2, sell + 1);
+	}
+
+	/** Value of one undamaged item of this stack. Enchanted books and potions are priced by their contents. */
+	public static long baseValue(ItemStack stack) {
+		Item item = stack.getItem();
+		if (item == Items.ENCHANTED_BOOK) {
+			ItemEnchantments en = stack.get(DataComponents.STORED_ENCHANTMENTS);
+			if (en != null && !en.isEmpty()) {
+				long sum = 0;
+				for (Object2IntMap.Entry<Holder<Enchantment>> e : en.entrySet()) {
+					sum += enchantPrice(e.getKey(), e.getIntValue());
+				}
+				return sum;
+			}
+		} else if (item == Items.POTION || item == Items.SPLASH_POTION || item == Items.LINGERING_POTION
+				|| item == Items.TIPPED_ARROW) {
+			PotionContents pc = stack.get(DataComponents.POTION_CONTENTS);
+			if (pc != null && pc.potion().isPresent()) {
+				String path = keyPath(pc.potion().get());
+				return PLAIN_POTIONS.contains(path) ? 20 : potionPrice(item, path);
+			}
+		}
+		return SELL.getOrDefault(item, 0L);
 	}
 
 	/** Money the player gets for ONE item of this stack (0 = cannot be sold). Damaged items are worth less. */
 	public static long unitSell(ItemStack stack) {
-		long base = SELL.getOrDefault(stack.getItem(), 0L);
+		long base = baseValue(stack);
 		if (base <= 0) return 0;
 		if (stack.isDamaged() && stack.getMaxDamage() > 0) {
 			double left = (double) (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage();
