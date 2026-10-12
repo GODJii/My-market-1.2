@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "mymarket",
+	"version": "${version}",
+	"name": "My Market",
+	"description": "Money as a plain number. Sell and buy any item with a searchable, scrollable shop and a compact money HUD.",
+	"authors": ["Kojji"],
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["com.mymarket.MyMarketMod"],
+		"client": ["com.mymarket.MyMarketClient"]
+	},
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
