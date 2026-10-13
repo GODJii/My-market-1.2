@@ -14,15 +14,15 @@ import java.util.Locale;
 
 /** Small helpers for building GUI buttons and text. */
 public final class Ui {
+	private static final String[] SUFFIX = {"", "K", "M", "B", "T", "Qa", "Qi"};
+
 	private Ui() {}
 
 	public static Component text(String s, ChatFormatting color) {
 		return Component.literal(s).withStyle(Style.EMPTY.withColor(color).withItalic(false));
 	}
 
-	private static final String[] SUFFIX = {"", "K", "M", "B", "T", "Qa", "Qi"};
-
-	/** Compact money: 1-999, then 1K, 1.5M, 2.25B, T, Qa, Qi. Always rounds DOWN so it never shows more than you have. */
+	/** Short money format: 1.5K, 2.35M, 41.8M ... */
 	public static String money(long v) {
 		if (v < 0) return "-" + money(-v);
 		if (v < 1000) return Long.toString(v);
@@ -33,12 +33,12 @@ public final class Ui {
 			idx++;
 		}
 		long whole = v / pow;
-		int frac = (int) Math.floor((double) (v % pow) / pow * 100);
-		String f = frac == 0 ? "" : (frac % 10 == 0 ? "." + (frac / 10) : String.format(Locale.US, ".%02d", frac));
+		int frac = (int) Math.floor((double) (v % pow) / pow * 100.0);
+		String f = frac == 0 ? "" : (frac % 10 == 0 ? "." + frac / 10 : String.format(Locale.US, ".%02d", frac));
 		return whole + f + SUFFIX[idx];
 	}
 
-	/** Full number with thousands separators, e.g. 4,706,928. */
+	/** Full number with commas. */
 	public static String exact(long v) {
 		return String.format(Locale.US, "%,d", v);
 	}

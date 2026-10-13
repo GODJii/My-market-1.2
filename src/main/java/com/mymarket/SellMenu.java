@@ -21,6 +21,7 @@ import net.minecraft.world.item.Items;
  *   Left click  = sell the whole stack
  *   Right click = sell 1
  *   Shift+click = sell every stack of that item in your inventory
+ * Items bought from the shop sell for 50% of the shop price, items you found/crafted sell for 80%.
  */
 public class SellMenu extends ChestMenu {
 	private static final int SLOT_BALANCE = 0;
@@ -55,12 +56,15 @@ public class SellMenu extends ChestMenu {
 	private void refresh() {
 		for (int i = 0; i < 9; i++) top.setItem(i, Ui.filler());
 		top.setItem(SLOT_BALANCE, Ui.button(Items.GOLD_INGOT,
-				Ui.text("Balance: $" + Ui.money(balance()), ChatFormatting.GOLD)));
+				Ui.text("Balance: $" + Ui.money(balance()), ChatFormatting.GOLD),
+				Ui.text("Exact: " + Ui.exact(balance()), ChatFormatting.GRAY)));
 		top.setItem(SLOT_HELP, Ui.button(Items.BOOK,
 				Ui.text("How to sell", ChatFormatting.YELLOW),
 				Ui.text("Left click = sell the whole stack", ChatFormatting.GRAY),
 				Ui.text("Right click = sell 1", ChatFormatting.GRAY),
-				Ui.text("Shift+click = sell every stack of this item", ChatFormatting.GRAY)));
+				Ui.text("Shift+click = sell every stack of this item", ChatFormatting.GRAY),
+				Ui.text("Found / crafted items: 80% of the shop price", ChatFormatting.GREEN),
+				Ui.text("Items bought from the shop: 50%", ChatFormatting.RED)));
 		top.setItem(SLOT_SELL_ALL, Ui.button(Items.EMERALD_BLOCK,
 				Ui.text("Sell everything in inventory", ChatFormatting.GREEN),
 				Ui.text("Hotbar (bottom 9 slots) is not included", ChatFormatting.GRAY)));
@@ -111,7 +115,9 @@ public class SellMenu extends ChestMenu {
 				Slot s = this.slots.get(i);
 				ItemStack st = s.getItem();
 				if (st.isEmpty() || !st.is(reference.getItem()) || Prices.hasHiddenContents(st)) continue;
-				total += Prices.unitSell(st) * st.getCount();
+				long unit = Prices.unitSell(st);
+				if (unit <= 0) continue;
+				total += unit * st.getCount();
 				count += st.getCount();
 				s.set(ItemStack.EMPTY);
 			}
@@ -133,8 +139,10 @@ public class SellMenu extends ChestMenu {
 		for (int i = FIRST_PLAYER_SLOT; i < FIRST_HOTBAR_SLOT; i++) {
 			Slot s = this.slots.get(i);
 			ItemStack st = s.getItem();
-			if (st.isEmpty() || Prices.unitSell(st) <= 0 || Prices.hasHiddenContents(st)) continue;
-			total += Prices.unitSell(st) * st.getCount();
+			if (st.isEmpty() || Prices.hasHiddenContents(st)) continue;
+			long unit = Prices.unitSell(st);
+			if (unit <= 0) continue;
+			total += unit * st.getCount();
 			count += st.getCount();
 			s.set(ItemStack.EMPTY);
 		}

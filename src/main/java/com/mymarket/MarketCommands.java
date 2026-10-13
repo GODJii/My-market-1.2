@@ -24,11 +24,17 @@ public final class MarketCommands {
 			return 1;
 		}));
 
+		// /shop and /buy open the shop; /shop <name> opens it with a search already typed
 		for (String name : new String[]{"shop", "buy"}) {
-			d.register(Commands.literal(name).executes(c -> {
-				BuyMenu.open(c.getSource().getPlayerOrException());
-				return 1;
-			}));
+			d.register(Commands.literal(name)
+					.executes(c -> {
+						BuyMenu.open(c.getSource().getPlayerOrException());
+						return 1;
+					})
+					.then(Commands.argument("name", StringArgumentType.greedyString()).executes(c -> {
+						BuyMenu.open(c.getSource().getPlayerOrException(), StringArgumentType.getString(c, "name"));
+						return 1;
+					})));
 		}
 
 		for (String name : new String[]{"money", "balance"}) {
@@ -50,7 +56,8 @@ public final class MarketCommands {
 	private static int showBalance(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
 		ServerPlayer p = c.getSource().getPlayerOrException();
 		long money = MoneyData.get(c.getSource().getServer()).get(p.getUUID());
-		p.sendSystemMessage(Component.literal("Balance: $" + Ui.money(money) + " (" + Ui.exact(money) + ")").withStyle(ChatFormatting.GOLD));
+		p.sendSystemMessage(Component.literal("Balance: $" + Ui.money(money) + " (" + Ui.exact(money) + ")")
+				.withStyle(ChatFormatting.GOLD));
 		return 1;
 	}
 
@@ -77,15 +84,17 @@ public final class MarketCommands {
 			p.sendSystemMessage(Component.literal("Hold an item in your hand first").withStyle(ChatFormatting.RED));
 			return 0;
 		}
-		long unit = Prices.unitSell(stack);
-		if (unit <= 0) {
+		long value = Prices.baseValue(stack);
+		if (value <= 0) {
 			p.sendSystemMessage(Component.literal("This item cannot be bought or sold").withStyle(ChatFormatting.RED));
 			return 0;
 		}
-		Prices.Tier t = Prices.tierOfPrice(Prices.baseValue(stack));
+		Prices.Tier t = Prices.tierOfPrice(value);
+		boolean bought = Prices.isBought(stack);
 		p.sendSystemMessage(stack.getHoverName().copy().withStyle(t.color)
-				.append(Component.literal("  [" + t.label + "]  Sell $" + Ui.money(unit)
-						+ " | Buy $" + Ui.money(Prices.buyPrice(Prices.baseValue(stack)))).withStyle(ChatFormatting.YELLOW)));
+				.append(Component.literal("  [" + t.label + "]  Buy $" + Ui.money(Prices.buyPrice(value))
+						+ " | Sell $" + Ui.money(Prices.unitSell(stack)) + (bought ? " (bought here, 50%)" : " (found/crafted, 80%)"))
+						.withStyle(ChatFormatting.YELLOW)));
 		return 1;
 	}
 }

@@ -12,10 +12,10 @@ public class MyMarketMod implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		// Build the price list every time a world/server starts.
+		// Build the price list and the shop categories every time a world/server starts.
 		ServerLifecycleEvents.SERVER_STARTING.register(Prices::reload);
 		Net.init();
-		// Register /sell /shop /buy /money /balance /price
+		GodPickaxe.init();
 		CommandRegistrationCallback.EVENT.register(MarketCommands::register);
 		LOGGER.info("My Market loaded");
 	}

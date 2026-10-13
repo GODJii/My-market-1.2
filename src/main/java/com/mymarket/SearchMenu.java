@@ -1,6 +1,7 @@
 package com.mymarket;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleMenuProvider;
@@ -12,14 +13,9 @@ import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-/**
- * Text box for the shop search. It is a normal anvil window used only as a text field:
- * type in the name box, then click the paper in the result slot to search.
- * Nothing can be taken out or moved, and no XP is used.
- */
+/** Search window for players WITHOUT the client mod: type a name in the anvil, click the result. */
 public class SearchMenu extends AnvilMenu {
 	private static final int SLOT_RESULT = 2;
-
 	private final ServerPlayer viewer;
 	private final BuyMenu.State state;
 	private String typed;
@@ -29,8 +25,8 @@ public class SearchMenu extends AnvilMenu {
 		this.viewer = player;
 		this.state = state;
 		this.typed = state.query;
-		ItemStack input = new ItemStack(Items.NAME_TAG);
-		input.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, Component.literal(state.query));
+		ItemStack input = new ItemStack(Items.PAPER);
+		input.set(DataComponents.CUSTOM_NAME, Component.literal(state.query));
 		this.inputSlots.setItem(0, input);
 		createResult();
 	}
@@ -41,7 +37,6 @@ public class SearchMenu extends AnvilMenu {
 				Component.literal("Search the shop")));
 	}
 
-	/** Called whenever the player types in the name box. */
 	@Override
 	public boolean setItemName(String name) {
 		this.typed = name == null ? "" : name.trim();
@@ -50,12 +45,11 @@ public class SearchMenu extends AnvilMenu {
 		return true;
 	}
 
-	/** The result slot is always a "click to search" button. */
 	@Override
 	public void createResult() {
-		ItemStack button = new ItemStack(Items.PAPER);
-		button.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
-				Ui.text(typed.isEmpty() ? "Click to show everything" : "Click to search: " + typed, ChatFormatting.GREEN));
+		ItemStack button = new ItemStack(Items.LIME_DYE);
+		button.set(DataComponents.CUSTOM_NAME, Ui.text(
+				typed.isEmpty() ? "Click to show everything" : "Click to search: " + typed, ChatFormatting.GREEN));
 		this.resultSlots.setItem(0, button);
 	}
 
@@ -65,10 +59,9 @@ public class SearchMenu extends AnvilMenu {
 			state.query = typed;
 			state.row = 0;
 			BuyMenu.open(viewer, state);
-			return;
+		} else {
+			sendAllDataToRemote();
 		}
-		// Everything else is ignored so nothing can be taken or duplicated.
-		sendAllDataToRemote();
 	}
 
 	@Override

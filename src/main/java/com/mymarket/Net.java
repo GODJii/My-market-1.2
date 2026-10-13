@@ -14,72 +14,14 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
-/**
- * Networking shared by client and server.
- * Everything here is optional for the player: without the mod on the client the shop still works
- * (arrow buttons instead of the mouse wheel, no money HUD).
- */
+/** Networking between the (optional) client part of the mod and the server. */
 public final class Net {
-	private Net() {}
-
-	/** Window titles start with this; the client uses it to know when the mouse wheel should scroll the shop. */
 	public static final String SHOP_TITLE = "Shop";
-
 	private static MinecraftServer server;
 
-	/** Server -> client: your current balance (drawn in the top-right corner). */
-	public record BalancePayload(long amount) implements CustomPacketPayload {
-		public static final Type<BalancePayload> TYPE =
-				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "balance"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, BalancePayload> CODEC =
-				StreamCodec.composite(ByteBufCodecs.VAR_LONG, BalancePayload::amount, BalancePayload::new);
+	private Net() {}
 
-		@Override
-		public Type<? extends CustomPacketPayload> type() {
-			return TYPE;
-		}
-	}
-
-	/** Client -> server: mouse wheel moved while the shop is open (-1 = up, 1 = down). */
-	public record ScrollPayload(int dir) implements CustomPacketPayload {
-		public static final Type<ScrollPayload> TYPE =
-				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "scroll"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, ScrollPayload> CODEC =
-				StreamCodec.composite(ByteBufCodecs.VAR_INT, ScrollPayload::dir, ScrollPayload::new);
-
-		@Override
-		public Type<? extends CustomPacketPayload> type() {
-			return TYPE;
-		}
-	}
-
-	/** Client -> server: the text in the search box changed. */
-	public record SearchPayload(String text) implements CustomPacketPayload {
-		public static final Type<SearchPayload> TYPE =
-				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "search"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, SearchPayload> CODEC =
-				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, SearchPayload::text, SearchPayload::new);
-
-		@Override
-		public Type<? extends CustomPacketPayload> type() {
-			return TYPE;
-		}
-	}
-
-	/** Server -> client, sent just before the shop opens: the text to put in the search box. */
-	public record PrefillPayload(String text) implements CustomPacketPayload {
-		public static final Type<PrefillPayload> TYPE =
-				new Type<>(ResourceLocation.fromNamespaceAndPath(MyMarketMod.MOD_ID, "prefill"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, PrefillPayload> CODEC =
-				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, PrefillPayload::text, PrefillPayload::new);
-
-		@Override
-		public Type<? extends CustomPacketPayload> type() {
-			return TYPE;
-		}
-	}
-
-	/** True if this player has the mod on their client (so the shop can use the real search box). */
+	/** True if the player has this mod on the client (needed for the search box and mouse wheel). */
 	public static boolean hasClientMod(ServerPlayer p) {
 		return ServerPlayNetworking.canSend(p, PrefillPayload.TYPE);
 	}
@@ -97,7 +39,6 @@ public final class Net {
 				menu.setQuery(t.length() > 32 ? t.substring(0, 32) : t);
 			}
 		});
-
 		ServerPlayNetworking.registerGlobalReceiver(ScrollPayload.TYPE, (payload, context) -> {
 			ServerPlayer p = context.player();
 			if (p.containerMenu instanceof BuyMenu menu) {
@@ -110,13 +51,61 @@ public final class Net {
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> sync(handler.getPlayer().getUUID()));
 	}
 
-	/** Pushes the player's balance to their client (if they have the mod). */
+	/** Sends the player's current balance to their client (for the HUD). */
 	public static void sync(UUID id) {
 		MinecraftServer s = server;
 		if (s == null) return;
 		ServerPlayer p = s.getPlayerList().getPlayer(id);
 		if (p != null && ServerPlayNetworking.canSend(p, BalancePayload.TYPE)) {
 			ServerPlayNetworking.send(p, new BalancePayload(MoneyData.get(s).get(id)));
+		}
+	}
+
+	public record BalancePayload(long amount) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<BalancePayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "balance"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, BalancePayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.VAR_LONG, BalancePayload::amount, BalancePayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	public record PrefillPayload(String text) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<PrefillPayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "prefill"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, PrefillPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, PrefillPayload::text, PrefillPayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	public record ScrollPayload(int dir) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<ScrollPayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "scroll"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, ScrollPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.VAR_INT, ScrollPayload::dir, ScrollPayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	public record SearchPayload(String text) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<SearchPayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "search"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SearchPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, SearchPayload::text, SearchPayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
 		}
 	}
 }

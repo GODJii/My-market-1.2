@@ -3,7 +3,7 @@
 	"id": "mymarket",
 	"version": "${version}",
 	"name": "My Market",
-	"description": "Money as a plain number. Sell and buy any item with a searchable, scrollable shop and a compact money HUD.",
+	"description": "Money as a plain number. Sell and buy any item with a searchable, scrollable shop with creative-style categories, a compact money HUD, and a GOD Pickaxe (3x3).",
 	"authors": ["Kojji"],
 	"license": "CC0-1.0",
 	"environment": "*",
