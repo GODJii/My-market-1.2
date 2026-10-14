@@ -17,13 +17,15 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.effect.MobEffectInstance;
 
-/** Client side: money HUD, search box inside the shop window, and mouse-wheel scrolling. */
+/** Client side: money HUD, search + amount boxes inside the shop window, and mouse-wheel scrolling. */
 public class MyMarketClient implements ClientModInitializer {
 	private static final float SCALE = 0.8F;
 	private static final int COLOR = 0xFFFFAA00;
 	private static volatile long balance = -1L;
 	private static String query = "";
 	private static EditBox searchBox;
+	private static String qtyText = "";
+	private static EditBox qtyBox;
 
 	@Override
 	public void onInitializeClient() {
@@ -35,6 +37,14 @@ public class MyMarketClient implements ClientModInitializer {
 			EditBox box = searchBox;
 			if (box != null && Minecraft.getInstance().screen != null) {
 				box.setValue(query);
+			}
+		});
+
+		ClientPlayNetworking.registerGlobalReceiver(Net.AmountPrefillPayload.TYPE, (payload, context) -> {
+			qtyText = payload.qty() > 0 ? String.valueOf(payload.qty()) : "";
+			EditBox box = qtyBox;
+			if (box != null && Minecraft.getInstance().screen != null) {
+				box.setValue(qtyText);
 			}
 		});
 
@@ -55,7 +65,7 @@ public class MyMarketClient implements ClientModInitializer {
 				// Search box on the title line of the chest window
 				int left = (width - 176) / 2;
 				int top = (height - 222) / 2;
-				EditBox box = new EditBox(client.font, left + 82, top + 4, 88, 12, Component.literal("Search"));
+				EditBox box = new EditBox(client.font, left + 36, top + 4, 70, 12, Component.literal("Search"));
 				box.setMaxLength(32);
 				box.setHint(Component.literal("Search..."));
 				box.setBordered(false);
@@ -71,16 +81,41 @@ public class MyMarketClient implements ClientModInitializer {
 				box.setFocused(true);
 				searchBox = box;
 
-				// Keep typing letters (like "e") from closing the window
+				// Amount box (next to the search box): how many items one click buys, 1-10000
+				EditBox qty = new EditBox(client.font, left + 110, top + 4, 58, 12, Component.literal("Amount"));
+				qty.setMaxLength(5);
+				qty.setFilter(t -> t.matches("\\d{0,5}"));
+				qty.setHint(Component.literal("Amount"));
+				qty.setBordered(false);
+				qty.setValue(qtyText);
+				qty.setResponder(text -> {
+					qtyText = text;
+					int n = 0;
+					try {
+						n = text.isEmpty() ? 0 : Integer.parseInt(text);
+					} catch (NumberFormatException ignored) {
+					}
+					if (ClientPlayNetworking.canSend(Net.AmountPayload.TYPE)) {
+						ClientPlayNetworking.send(new Net.AmountPayload(n));
+					}
+				});
+				Screens.getButtons(screen).add(qty);
+				qtyBox = qty;
+
+				// Keep typing letters (like "e") from closing the window: send keys to whichever box is active
 				ScreenKeyboardEvents.allowKeyPress(screen).register((s, key, scancode, modifiers) -> {
-					if (key != 256 && box.canConsumeInput()) {
-						box.keyPressed(key, scancode, modifiers);
-						return false;
+					if (key == 256) return true;
+					for (EditBox b : new EditBox[]{box, qty}) {
+						if (b.canConsumeInput()) {
+							b.keyPressed(key, scancode, modifiers);
+							return false;
+						}
 					}
 					return true;
 				});
 			} else {
 				searchBox = null;
+				qtyBox = null;
 			}
 		});
 	}

@@ -89,7 +89,7 @@ public final class QuickSeller {
 	}
 
 	private static boolean sellable(ItemStack st) {
-		if (GodPickaxe.isGod(st) || isQuickSeller(st)) return false;
+		if (GodPickaxe.isGod(st) || isQuickSeller(st) || QuickBuyer.isQuickBuyer(st)) return false;
 		if (st.has(DataComponents.CUSTOM_NAME) || st.isEnchanted()) return false;
 		if (Prices.hasHiddenContents(st)) return false;
 		return Prices.unitSell(st) > 0L;

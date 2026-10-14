@@ -104,6 +104,7 @@ public final class Prices {
 
 		insertGodPickaxe();
 		insertQuickSeller();
+		insertQuickBuyer();
 		MyMarketMod.LOGGER.info("My Market: {} priced items, {} shop entries, {} categories",
 				SELL.size(), ALL.size(), CATEGORIES.size());
 	}
@@ -215,6 +216,32 @@ public final class Prices {
 		int j = indexOfGodOrNetherite(ALL);
 		if (j >= 0) ALL.add(j + 1, qs);
 		else ALL.add(qs);
+	}
+
+	/** Puts the Quick Buyer right after the Quick Seller (same category). */
+	private static void insertQuickBuyer() {
+		Entry qb = new Entry(QuickBuyer.create(), QuickBuyer.VALUE, "quick buyer buy chest box barrel shulker farm");
+		boolean placed = false;
+		for (Category c : CATEGORIES) {
+			int i = indexOfQuickSeller(c.entries());
+			if (i >= 0) {
+				c.entries().add(i + 1, qb);
+				placed = true;
+				break;
+			}
+		}
+		if (!placed && !CATEGORIES.isEmpty()) CATEGORIES.get(0).entries().add(qb);
+
+		int j = indexOfQuickSeller(ALL);
+		if (j >= 0) ALL.add(j + 1, qb);
+		else ALL.add(qb);
+	}
+
+	private static int indexOfQuickSeller(List<Entry> list) {
+		for (int i = 0; i < list.size(); i++) {
+			if (QuickSeller.isQuickSeller(list.get(i).stack())) return i;
+		}
+		return -1;
 	}
 
 	private static int indexOfGodOrNetherite(List<Entry> list) {
@@ -346,6 +373,7 @@ public final class Prices {
 	public static long baseValue(ItemStack stack) {
 		if (GodPickaxe.isGod(stack)) return godValue();
 		if (QuickSeller.isQuickSeller(stack)) return QuickSeller.VALUE;
+		if (QuickBuyer.isQuickBuyer(stack)) return QuickBuyer.VALUE;
 		Item item = stack.getItem();
 		if (item == Items.ENCHANTED_BOOK) {
 			ItemEnchantments en = stack.get(DataComponents.STORED_ENCHANTMENTS);

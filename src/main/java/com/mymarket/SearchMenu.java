@@ -13,28 +13,48 @@ import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-/** Search window for players WITHOUT the client mod: type a name in the anvil, click the result. */
+/**
+ * Window for players WITHOUT the client mod: type in the anvil, then click the green result.
+ * Used for searching the shop and for typing a custom amount (1-10000).
+ */
 public class SearchMenu extends AnvilMenu {
 	private static final int SLOT_RESULT = 2;
 	private final ServerPlayer viewer;
 	private final BuyMenu.State state;
+	private final boolean amountMode;
 	private String typed;
 
-	private SearchMenu(int syncId, Inventory inv, ServerPlayer player, BuyMenu.State state) {
+	private SearchMenu(int syncId, Inventory inv, ServerPlayer player, BuyMenu.State state, boolean amountMode) {
 		super(syncId, inv, ContainerLevelAccess.NULL);
 		this.viewer = player;
 		this.state = state;
-		this.typed = state.query;
+		this.amountMode = amountMode;
+		String start = amountMode ? (state.customQty > 0 ? String.valueOf(state.customQty) : "") : state.query;
+		this.typed = start;
 		ItemStack input = new ItemStack(Items.PAPER);
-		input.set(DataComponents.CUSTOM_NAME, Component.literal(state.query));
+		input.set(DataComponents.CUSTOM_NAME, Component.literal(start));
 		this.inputSlots.setItem(0, input);
 		createResult();
 	}
 
 	static void open(ServerPlayer player, BuyMenu.State state) {
 		player.openMenu(new SimpleMenuProvider(
-				(syncId, inv, p) -> new SearchMenu(syncId, inv, player, state),
+				(syncId, inv, p) -> new SearchMenu(syncId, inv, player, state, false),
 				Component.literal("Search the shop")));
+	}
+
+	static void openAmount(ServerPlayer player, BuyMenu.State state) {
+		player.openMenu(new SimpleMenuProvider(
+				(syncId, inv, p) -> new SearchMenu(syncId, inv, player, state, true),
+				Component.literal("Type the amount (1-" + BuyMenu.MAX_AMOUNT + ")")));
+	}
+
+	/** The digits typed so far as a number, limited to 0..10000. */
+	private int typedAmount() {
+		String digits = typed.replaceAll("[^0-9]", "");
+		if (digits.isEmpty()) return 0;
+		if (digits.length() > 5) return BuyMenu.MAX_AMOUNT;
+		return Math.max(0, Math.min(Integer.parseInt(digits), BuyMenu.MAX_AMOUNT));
 	}
 
 	@Override
@@ -48,16 +68,26 @@ public class SearchMenu extends AnvilMenu {
 	@Override
 	public void createResult() {
 		ItemStack button = new ItemStack(Items.LIME_DYE);
-		button.set(DataComponents.CUSTOM_NAME, Ui.text(
-				typed.isEmpty() ? "Click to show everything" : "Click to search: " + typed, ChatFormatting.GREEN));
+		String label;
+		if (amountMode) {
+			int n = typedAmount();
+			label = n > 0 ? "Click to buy " + n + " per click" : "Click to turn the custom amount off";
+		} else {
+			label = typed.isEmpty() ? "Click to show everything" : "Click to search: " + typed;
+		}
+		button.set(DataComponents.CUSTOM_NAME, Ui.text(label, ChatFormatting.GREEN));
 		this.resultSlots.setItem(0, button);
 	}
 
 	@Override
 	public void clicked(int slotId, int button, ClickType clickType, Player p) {
 		if (slotId == SLOT_RESULT && (clickType == ClickType.PICKUP || clickType == ClickType.QUICK_MOVE)) {
-			state.query = typed;
-			state.row = 0;
+			if (amountMode) {
+				state.customQty = typedAmount();
+			} else {
+				state.query = typed;
+				state.row = 0;
+			}
 			BuyMenu.open(viewer, state);
 		} else {
 			sendAllDataToRemote();

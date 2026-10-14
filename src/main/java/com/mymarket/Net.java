@@ -31,12 +31,20 @@ public final class Net {
 		PayloadTypeRegistry.playC2S().register(ScrollPayload.TYPE, ScrollPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(SearchPayload.TYPE, SearchPayload.CODEC);
 		PayloadTypeRegistry.playS2C().register(PrefillPayload.TYPE, PrefillPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(AmountPayload.TYPE, AmountPayload.CODEC);
+		PayloadTypeRegistry.playS2C().register(AmountPrefillPayload.TYPE, AmountPrefillPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(SearchPayload.TYPE, (payload, context) -> {
 			ServerPlayer p = context.player();
 			if (p.containerMenu instanceof BuyMenu menu) {
 				String t = payload.text();
 				menu.setQuery(t.length() > 32 ? t.substring(0, 32) : t);
+			}
+		});
+		ServerPlayNetworking.registerGlobalReceiver(AmountPayload.TYPE, (payload, context) -> {
+			ServerPlayer p = context.player();
+			if (p.containerMenu instanceof BuyMenu menu) {
+				menu.setCustomQty(payload.qty());
 			}
 		});
 		ServerPlayNetworking.registerGlobalReceiver(ScrollPayload.TYPE, (payload, context) -> {
@@ -102,6 +110,32 @@ public final class Net {
 				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "search"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, SearchPayload> CODEC =
 				StreamCodec.composite(ByteBufCodecs.STRING_UTF8, SearchPayload::text, SearchPayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	/** Client -> server: the number typed in the Amount box (0 = empty). */
+	public record AmountPayload(int qty) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<AmountPayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "amount"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, AmountPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.VAR_INT, AmountPayload::qty, AmountPayload::new);
+
+		@Override
+		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+			return TYPE;
+		}
+	}
+
+	/** Server -> client: put this number into the Amount box (0 = clear it). */
+	public record AmountPrefillPayload(int qty) implements CustomPacketPayload {
+		public static final CustomPacketPayload.Type<AmountPrefillPayload> TYPE =
+				new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("mymarket", "amount_prefill"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, AmountPrefillPayload> CODEC =
+				StreamCodec.composite(ByteBufCodecs.VAR_INT, AmountPrefillPayload::qty, AmountPrefillPayload::new);
 
 		@Override
 		public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
