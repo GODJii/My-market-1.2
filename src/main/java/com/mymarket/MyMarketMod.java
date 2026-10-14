@@ -16,6 +16,7 @@ public class MyMarketMod implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STARTING.register(Prices::reload);
 		Net.init();
 		GodPickaxe.init();
+		QuickSeller.init();
 		CommandRegistrationCallback.EVENT.register(MarketCommands::register);
 		LOGGER.info("My Market loaded");
 	}

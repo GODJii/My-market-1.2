@@ -50,6 +50,10 @@ public class BuyMenu extends ChestMenu {
 	private final State st;
 	private final boolean hasMod;
 	private List<Prices.Entry> view = List.of();
+	/** Time of the last successful purchase. Used to stop one click from buying several times. */
+	private long lastBuyMs = 0L;
+	private static final long COOLDOWN_MS = 250L;        // normal click
+	private static final long STACK_COOLDOWN_MS = 800L;  // shift+click (a whole stack)
 
 	private BuyMenu(int syncId, Inventory inv, SimpleContainer top, ServerPlayer player, State st) {
 		super(MenuType.GENERIC_9x6, syncId, inv, top, 6);
@@ -277,6 +281,11 @@ public class BuyMenu extends ChestMenu {
 		if (idx >= view.size()) return;
 		Prices.Entry entry = view.get(idx);
 
+		// One physical click = one purchase. Anything that arrives too soon after the last buy is ignored,
+		// so a held-down mouse, a double click or a shift+drag can't buy several stacks.
+		long nowMs = System.currentTimeMillis();
+		if (nowMs - lastBuyMs < (shift ? STACK_COOLDOWN_MS : COOLDOWN_MS)) return;
+
 		int stack = entry.stack().getMaxStackSize();
 		int amount = shift ? stack : (button == 1 ? 1 : amountFor(entry));
 		long unit = Prices.buyPrice(entry.value());
@@ -287,6 +296,7 @@ public class BuyMenu extends ChestMenu {
 			player.displayClientMessage(Ui.text("Not enough money. Need $" + Ui.money(cost), ChatFormatting.RED), true);
 			return;
 		}
+		lastBuyMs = nowMs;
 		ItemStack give = entry.stack().copyWithCount(amount);
 		Prices.markBought(give); // items bought here sell back for 50%
 		MutableComponent name = give.getHoverName().copy();

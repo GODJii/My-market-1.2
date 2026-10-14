@@ -23,7 +23,7 @@ import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.component.ItemEnchantments;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.enchantment.Enchantment;
 
@@ -103,6 +103,7 @@ public final class Prices {
 		if (CATEGORIES.isEmpty()) buildFallback();
 
 		insertGodPickaxe();
+		insertQuickSeller();
 		MyMarketMod.LOGGER.info("My Market: {} priced items, {} shop entries, {} categories",
 				SELL.size(), ALL.size(), CATEGORIES.size());
 	}
@@ -195,6 +196,32 @@ public final class Prices {
 		int j = indexOfNetheritePickaxe(ALL);
 		if (j >= 0) ALL.add(j + 1, god);
 		else ALL.add(god);
+	}
+
+	/** Puts the Quick Seller right after the GOD pickaxe (same category), or after the netherite pickaxe. */
+	private static void insertQuickSeller() {
+		Entry qs = new Entry(QuickSeller.create(), QuickSeller.VALUE, "quick seller sell chest box barrel shulker");
+		boolean placed = false;
+		for (Category c : CATEGORIES) {
+			int i = indexOfGodOrNetherite(c.entries());
+			if (i >= 0) {
+				c.entries().add(i + 1, qs);
+				placed = true;
+				break;
+			}
+		}
+		if (!placed && !CATEGORIES.isEmpty()) CATEGORIES.get(0).entries().add(qs);
+
+		int j = indexOfGodOrNetherite(ALL);
+		if (j >= 0) ALL.add(j + 1, qs);
+		else ALL.add(qs);
+	}
+
+	private static int indexOfGodOrNetherite(List<Entry> list) {
+		for (int i = 0; i < list.size(); i++) {
+			if (GodPickaxe.isGod(list.get(i).stack())) return i;
+		}
+		return indexOfNetheritePickaxe(list);
 	}
 
 	private static int indexOfNetheritePickaxe(List<Entry> list) {
@@ -318,6 +345,7 @@ public final class Prices {
 	/** Base value of one item (enchanted books and potions are priced by what they contain). */
 	public static long baseValue(ItemStack stack) {
 		if (GodPickaxe.isGod(stack)) return godValue();
+		if (QuickSeller.isQuickSeller(stack)) return QuickSeller.VALUE;
 		Item item = stack.getItem();
 		if (item == Items.ENCHANTED_BOOK) {
 			ItemEnchantments en = stack.get(DataComponents.STORED_ENCHANTMENTS);
