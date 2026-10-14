@@ -9,7 +9,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -21,7 +20,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.component.BundleContents;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.alchemy.PotionContents;
@@ -43,10 +41,9 @@ import java.util.Set;
 /**
  * Prices, shop categories and the sell rules.
  *
- * value  = base value of an item (what a shop-bought item sells back for = 50% of the shop price)
+ * value  = base value of an item
  * buy    = 2 x value                (the price in the shop)
- * sell   = value                    for items bought from the shop (50%)
- *          1.6 x value              for items you found / mined / crafted yourself (80%)
+ * sell   = 1.6 x value (80% of the shop price) for every item
  */
 public final class Prices {
 	private static final long[] TIER_PRICE = {5L, 25L, 300L, 3000L, 40000L, 500000L};
@@ -61,8 +58,6 @@ public final class Prices {
 	private static final Set<String> UNSELLABLE = new HashSet<>();
 	private static final Set<String> NOT_BUYABLE = new HashSet<>();
 
-	/** Tag put on every item bought from the shop (those sell back for 50%). */
-	public static final String BOUGHT_TAG = "mymarket_bought";
 	/** Found / crafted items sell for 80% of the shop price = 1.6 x value. */
 	private static final double FOUND_MULTIPLIER = 1.6;
 	/** The GOD pickaxe is worth this many normal netherite pickaxes. */
@@ -364,7 +359,7 @@ public final class Prices {
 		return Math.max(value * 2L, value + 1L);
 	}
 
-	/** What a stack sells for, per item, when it was found/crafted yourself (80% of the shop price). */
+	/** What one item sells for: 80% of the shop price (the same for every item, wherever it came from). */
 	public static long foundValue(long value) {
 		return Math.max(1L, Math.round(value * FOUND_MULTIPLIER));
 	}
@@ -395,24 +390,11 @@ public final class Prices {
 		return SELL.getOrDefault(item, 0L);
 	}
 
-	public static boolean isBought(ItemStack stack) {
-		CustomData d = stack.get(DataComponents.CUSTOM_DATA);
-		return d != null && d.copyTag().getBoolean(BOUGHT_TAG);
-	}
-
-	/** Marks a stack as "bought from the shop" so it sells back for 50%. */
-	public static void markBought(ItemStack stack) {
-		CustomData d = stack.get(DataComponents.CUSTOM_DATA);
-		CompoundTag tag = d != null ? d.copyTag() : new CompoundTag();
-		tag.putBoolean(BOUGHT_TAG, true);
-		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-	}
-
 	/** Money for ONE item of this stack (0 = cannot be sold). Damaged items are worth less. */
 	public static long unitSell(ItemStack stack) {
 		long base = baseValue(stack);
 		if (base <= 0L) return 0L;
-		if (!isBought(stack)) base = foundValue(base);
+		base = foundValue(base);
 		if (stack.isDamaged() && stack.getMaxDamage() > 0) {
 			double left = (double) (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage();
 			base = Math.max(1L, Math.round(base * left));

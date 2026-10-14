@@ -90,10 +90,9 @@ public final class MarketCommands {
 			return 0;
 		}
 		Prices.Tier t = Prices.tierOfPrice(value);
-		boolean bought = Prices.isBought(stack);
 		p.sendSystemMessage(stack.getHoverName().copy().withStyle(t.color)
 				.append(Component.literal("  [" + t.label + "]  Buy $" + Ui.money(Prices.buyPrice(value))
-						+ " | Sell $" + Ui.money(Prices.unitSell(stack)) + (bought ? " (bought here, 50%)" : " (found/crafted, 80%)"))
+						+ " | Sell $" + Ui.money(Prices.unitSell(stack)) + " (80%)")
 						.withStyle(ChatFormatting.YELLOW)));
 		return 1;
 	}

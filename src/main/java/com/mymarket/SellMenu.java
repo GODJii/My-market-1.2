@@ -21,7 +21,7 @@ import net.minecraft.world.item.Items;
  *   Left click  = sell the whole stack
  *   Right click = sell 1
  *   Shift+click = sell every stack of that item in your inventory
- * Items bought from the shop sell for 50% of the shop price, items you found/crafted sell for 80%.
+ * Every item sells for 80% of its shop price.
  */
 public class SellMenu extends ChestMenu {
 	private static final int SLOT_BALANCE = 0;
@@ -63,8 +63,7 @@ public class SellMenu extends ChestMenu {
 				Ui.text("Left click = sell the whole stack", ChatFormatting.GRAY),
 				Ui.text("Right click = sell 1", ChatFormatting.GRAY),
 				Ui.text("Shift+click = sell every stack of this item", ChatFormatting.GRAY),
-				Ui.text("Found / crafted items: 80% of the shop price", ChatFormatting.GREEN),
-				Ui.text("Items bought from the shop: 50%", ChatFormatting.RED)));
+				Ui.text("Every item sells for 80% of the shop price", ChatFormatting.GREEN)));
 		top.setItem(SLOT_SELL_ALL, Ui.button(Items.EMERALD_BLOCK,
 				Ui.text("Sell everything in inventory", ChatFormatting.GREEN),
 				Ui.text("Hotbar (bottom 9 slots) is not included", ChatFormatting.GRAY)));

@@ -284,8 +284,7 @@ public class BuyMenu extends ChestMenu {
 		if (existing != null) lines.addAll(existing.lines());
 		lines.add(Ui.text("Rarity: " + t.label, t.color));
 		lines.add(Ui.text("Price: $" + Ui.money(Prices.buyPrice(e.value())) + " each", ChatFormatting.YELLOW));
-		lines.add(Ui.text("Sells back: $" + Ui.money(e.value()) + " (bought here)", ChatFormatting.DARK_GRAY));
-		lines.add(Ui.text("Sells for: $" + Ui.money(Prices.foundValue(e.value())) + " (found/crafted)", ChatFormatting.DARK_GRAY));
+		lines.add(Ui.text("Sells for: $" + Ui.money(Prices.foundValue(e.value())) + " (80%)", ChatFormatting.DARK_GRAY));
 		lines.add(Ui.text("Click = buy " + Ui.exact(amountFor(e)) + (boxMode() ? " (into the box)" : ""), ChatFormatting.GRAY));
 		lines.add(Ui.text("Right click = buy 1", ChatFormatting.GRAY));
 		lines.add(Ui.text("Shift+click = buy a stack (" + e.stack().getMaxStackSize() + ")", ChatFormatting.GRAY));
@@ -361,7 +360,6 @@ public class BuyMenu extends ChestMenu {
 		wanted = Math.max(1, Math.min(wanted, MAX_AMOUNT));
 
 		ItemStack proto = entry.stack().copyWithCount(1);
-		Prices.markBought(proto); // items bought here sell back for 50%
 
 		// Where do the items go? Into the Quick Buyer box, or into the player's inventory.
 		Container box = null;
