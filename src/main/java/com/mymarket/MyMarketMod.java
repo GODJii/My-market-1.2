@@ -19,6 +19,7 @@ public class MyMarketMod implements ModInitializer {
 		QuickSeller.init();
 		QuickBuyer.init();
 		AutoBuyChest.init();
+		FastHopper.init();
 		CommandRegistrationCallback.EVENT.register(MarketCommands::register);
 		LOGGER.info("My Market loaded");
 	}

@@ -109,7 +109,8 @@ public final class AutoBuyChest {
 
 	/** Items that may not be auto-bought (special shop items). */
 	private static boolean forbidden(ItemStack s) {
-		return GodPickaxe.isGod(s) || QuickSeller.isQuickSeller(s) || QuickBuyer.isQuickBuyer(s) || isAutoChest(s);
+		return GodPickaxe.isGod(s) || QuickSeller.isQuickSeller(s) || QuickBuyer.isQuickBuyer(s) || isAutoChest(s)
+				|| FastHopper.isFastHopper(s);
 	}
 
 	// ---------------------------------------------------------------- setup

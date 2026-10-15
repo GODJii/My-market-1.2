@@ -101,6 +101,7 @@ public final class Prices {
 		insertQuickSeller();
 		insertQuickBuyer();
 		insertAutoBuyChest();
+		insertFastHopper();
 		MyMarketMod.LOGGER.info("My Market: {} priced items, {} shop entries, {} categories",
 				SELL.size(), ALL.size(), CATEGORIES.size());
 	}
@@ -253,6 +254,32 @@ public final class Prices {
 		else ALL.add(ab);
 	}
 
+	/** Puts the Fast Hopper right after the Auto Buy Chest (same category). */
+	private static void insertFastHopper() {
+		Entry fh = new Entry(FastHopper.create(), FastHopper.VALUE, "fast hopper quick speed transfer");
+		boolean placed = false;
+		for (Category c : CATEGORIES) {
+			int i = indexOfAutoBuyChest(c.entries());
+			if (i >= 0) {
+				c.entries().add(i + 1, fh);
+				placed = true;
+				break;
+			}
+		}
+		if (!placed && !CATEGORIES.isEmpty()) CATEGORIES.get(0).entries().add(fh);
+
+		int j = indexOfAutoBuyChest(ALL);
+		if (j >= 0) ALL.add(j + 1, fh);
+		else ALL.add(fh);
+	}
+
+	private static int indexOfAutoBuyChest(List<Entry> list) {
+		for (int i = 0; i < list.size(); i++) {
+			if (AutoBuyChest.isAutoChest(list.get(i).stack())) return i;
+		}
+		return -1;
+	}
+
 	private static int indexOfQuickBuyer(List<Entry> list) {
 		for (int i = 0; i < list.size(); i++) {
 			if (QuickBuyer.isQuickBuyer(list.get(i).stack())) return i;
@@ -398,6 +425,7 @@ public final class Prices {
 		if (QuickSeller.isQuickSeller(stack)) return QuickSeller.VALUE;
 		if (QuickBuyer.isQuickBuyer(stack)) return QuickBuyer.VALUE;
 		if (AutoBuyChest.isAutoChest(stack)) return AutoBuyChest.VALUE;
+		if (FastHopper.isFastHopper(stack)) return FastHopper.VALUE;
 		Item item = stack.getItem();
 		if (item == Items.ENCHANTED_BOOK) {
 			ItemEnchantments en = stack.get(DataComponents.STORED_ENCHANTMENTS);
