@@ -9,6 +9,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemLore;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 
@@ -36,6 +37,27 @@ public final class Ui {
 		int frac = (int) Math.floor((double) (v % pow) / pow * 100.0);
 		String f = frac == 0 ? "" : (frac % 10 == 0 ? "." + frac / 10 : String.format(Locale.US, ".%02d", frac));
 		return whole + f + SUFFIX[idx];
+	}
+
+	/**
+	 * Reads an amount typed by a player: 5000000, 5,000,000, 20M, 2.5b, $750k ...
+	 * Returns 0 for empty text, -1 if it makes no sense.
+	 */
+	public static long parseMoney(String text) {
+		String t = text == null ? "" : text.toLowerCase(Locale.ROOT).replaceAll("[,$_\\s]", "");
+		if (t.isEmpty()) return 0L;
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(\\d+(?:\\.\\d+)?)([kmbt]?)$").matcher(t);
+		if (!m.matches()) return -1L;
+		long mult = switch (m.group(2)) {
+			case "k" -> 1_000L;
+			case "m" -> 1_000_000L;
+			case "b" -> 1_000_000_000L;
+			case "t" -> 1_000_000_000_000L;
+			default -> 1L;
+		};
+		BigDecimal v = new BigDecimal(m.group(1)).multiply(BigDecimal.valueOf(mult));
+		if (v.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) return -1L;
+		return v.longValue();
 	}
 
 	/** Full number with commas. */

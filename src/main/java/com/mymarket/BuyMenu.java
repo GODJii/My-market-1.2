@@ -94,11 +94,21 @@ public class BuyMenu extends ChestMenu {
 		open(player, s);
 	}
 
+	/** Auto Buy Chest: opens the shop; clicking an item chooses what the chest at {@code pos} buys. */
+	public static void openForSelect(ServerPlayer player, ServerLevel level, BlockPos pos) {
+		State s = new State();
+		s.selectLevel = level;
+		s.selectPos = pos.immutable();
+		open(player, s);
+	}
+
 	static void open(ServerPlayer player, State state) {
 		SimpleContainer top = new SimpleContainer(54);
+		// The title must start with "Shop" so the client mod adds its search and amount boxes
+		String title = state.selectPos != null ? Net.SHOP_TITLE + " - Auto Buy Chest" : Net.SHOP_TITLE;
 		player.openMenu(new SimpleMenuProvider(
 				(syncId, inv, p) -> new BuyMenu(syncId, inv, top, player, state),
-				Component.literal(Net.SHOP_TITLE)));
+				Component.literal(title)));
 	}
 
 	private long balance() {
@@ -127,6 +137,14 @@ public class BuyMenu extends ChestMenu {
 	private boolean boxMode() {
 		return st.boxPos != null;
 	}
+
+	/** True while an Auto Buy Chest is being set up (clicking an item chooses it instead of buying). */
+	private boolean selectMode() {
+		return st.selectPos != null;
+	}
+
+	/** Set when the window should close after this click (item chosen). */
+	private boolean done = false;
 
 	/** Called when the player types in the search box (client mod). */
 	public void setQuery(String q) {
@@ -231,6 +249,27 @@ public class BuyMenu extends ChestMenu {
 					Ui.text("the green item on the right", ChatFormatting.GRAY),
 					Ui.text("Right click = turn off", ChatFormatting.DARK_GRAY)));
 		}
+		if (selectMode()) {
+			AutoBuyData.Chest chest = AutoBuyChest.chestAt(player.getServer(), st.selectLevel, st.selectPos);
+			ItemStack cur = chest == null ? ItemStack.EMPTY : chest.target;
+			top.setItem(SLOT_QTY, Ui.button(Items.CHEST,
+					Ui.text("AUTO BUY CHEST", ChatFormatting.LIGHT_PURPLE),
+					Ui.text("Click an item below to auto-buy it", ChatFormatting.GRAY),
+					Ui.text("Now: " + (cur.isEmpty() ? "OFF" : cur.getHoverName().getString()),
+							cur.isEmpty() ? ChatFormatting.RED : ChatFormatting.GREEN),
+					Ui.text("Buys " + AutoBuyChest.stacksPerRefill() + " stack every " + AutoBuyChest.intervalSeconds()
+							+ "s when the chest is low", ChatFormatting.DARK_GRAY),
+					Ui.text("Money is taken from you at shop price", ChatFormatting.DARK_GRAY)));
+			top.setItem(SLOT_CUSTOM, Ui.button(Items.BARRIER,
+					Ui.text("Turn off", ChatFormatting.RED),
+					Ui.text("Stops buying. Items stay in the chest", ChatFormatting.GRAY)));
+			long left = chest == null ? -1L : chest.budgetLeft;
+			top.setItem(SLOT_POS, Ui.button(Items.EMERALD,
+					Ui.text(left < 0 ? "Spending limit: none" : "Spending limit: $" + Ui.money(left) + " left", ChatFormatting.GOLD),
+					Ui.text("Click, then type an amount (e.g. 20M)", ChatFormatting.GRAY),
+					Ui.text("The chest stops when it is used up", ChatFormatting.DARK_GRAY),
+					Ui.text("0 = no limit", ChatFormatting.DARK_GRAY)));
+		}
 		if (boxMode()) {
 			BlockPos bp = st.boxPos;
 			top.setItem(SLOT_BALANCE, Ui.button(Items.GOLD_INGOT,
@@ -246,10 +285,12 @@ public class BuyMenu extends ChestMenu {
 
 		int rowsTotal = Math.max(1, totalRows());
 		int rowEnd = Math.min(rowsTotal, st.row + VISIBLE_ROWS);
-		top.setItem(SLOT_POS, Ui.button(Items.PAPER,
-				Ui.text("Row " + (st.row + 1) + "-" + rowEnd + " of " + rowsTotal, ChatFormatting.WHITE),
-				Ui.text(view.size() + " items", ChatFormatting.GRAY),
-				Ui.text("Scroll the mouse wheel to browse", ChatFormatting.GRAY)));
+		if (!selectMode()) { // in select mode this slot is the spending-limit button
+			top.setItem(SLOT_POS, Ui.button(Items.PAPER,
+					Ui.text("Row " + (st.row + 1) + "-" + rowEnd + " of " + rowsTotal, ChatFormatting.WHITE),
+					Ui.text(view.size() + " items", ChatFormatting.GRAY),
+					Ui.text("Scroll the mouse wheel to browse", ChatFormatting.GRAY)));
+		}
 		if (searching()) {
 			top.setItem(SLOT_CLEAR, Ui.button(Items.BARRIER, Ui.text("Clear search", ChatFormatting.RED)));
 		}
@@ -285,9 +326,15 @@ public class BuyMenu extends ChestMenu {
 		lines.add(Ui.text("Rarity: " + t.label, t.color));
 		lines.add(Ui.text("Price: $" + Ui.money(Prices.buyPrice(e.value())) + " each", ChatFormatting.YELLOW));
 		lines.add(Ui.text("Sells for: $" + Ui.money(Prices.foundValue(e.value())) + " (80%)", ChatFormatting.DARK_GRAY));
-		lines.add(Ui.text("Click = buy " + Ui.exact(amountFor(e)) + (boxMode() ? " (into the box)" : ""), ChatFormatting.GRAY));
-		lines.add(Ui.text("Right click = buy 1", ChatFormatting.GRAY));
-		lines.add(Ui.text("Shift+click = buy a stack (" + e.stack().getMaxStackSize() + ")", ChatFormatting.GRAY));
+		if (selectMode()) {
+			lines.add(Ui.text("Click = auto-buy this item", ChatFormatting.GREEN));
+			lines.add(Ui.text("One stack costs $" + Ui.money(Prices.buyPrice(e.value()) * e.stack().getMaxStackSize()),
+					ChatFormatting.GRAY));
+		} else {
+			lines.add(Ui.text("Click = buy " + Ui.exact(amountFor(e)) + (boxMode() ? " (into the box)" : ""), ChatFormatting.GRAY));
+			lines.add(Ui.text("Right click = buy 1", ChatFormatting.GRAY));
+			lines.add(Ui.text("Shift+click = buy a stack (" + e.stack().getMaxStackSize() + ")", ChatFormatting.GRAY));
+		}
 		s.set(DataComponents.LORE, new ItemLore(lines));
 		return s;
 	}
@@ -311,6 +358,16 @@ public class BuyMenu extends ChestMenu {
 				}
 			} else if (slotId < FIRST_ITEM_SLOT + GRID) {
 				buy(slotId - FIRST_ITEM_SLOT, button, shift);
+				if (done) return; // the window closed
+			} else if (selectMode() && slotId == SLOT_CUSTOM) {
+				AutoBuyChest.clear(player, st.selectLevel, st.selectPos);
+				player.closeContainer();
+				return;
+			} else if (selectMode() && slotId == SLOT_QTY) {
+				// information only
+			} else if (selectMode() && slotId == SLOT_POS) {
+				SearchMenu.openBudget(player, st);
+				return;
 			} else if (slotId == SLOT_SEARCH) {
 				if (!hasMod) {
 					SearchMenu.open(player, st);
@@ -349,6 +406,14 @@ public class BuyMenu extends ChestMenu {
 		int idx = st.row * COLS + gridSlot;
 		if (idx >= view.size()) return;
 		Prices.Entry entry = view.get(idx);
+
+		if (selectMode()) {
+			if (AutoBuyChest.select(player, st.selectLevel, st.selectPos, entry.stack())) {
+				done = true;
+				player.closeContainer();
+			}
+			return;
+		}
 
 		// One physical click = one purchase. Anything that arrives too soon after the last buy is ignored,
 		// so a held-down mouse, a double click or a shift+drag can't buy several stacks.
@@ -439,7 +504,7 @@ public class BuyMenu extends ChestMenu {
 	}
 
 	/** How many of {@code proto} fit in the container. */
-	private static int capacity(Container c, ItemStack proto) {
+	static int capacity(Container c, ItemStack proto) {
 		int max = Math.min(proto.getMaxStackSize(), c.getMaxStackSize());
 		long cap = 0;
 		for (int i = 0; i < c.getContainerSize(); i++) {
@@ -452,7 +517,7 @@ public class BuyMenu extends ChestMenu {
 	}
 
 	/** Puts {@code amount} of {@code proto} into the container (fills existing stacks first). */
-	private static void insertInto(Container c, ItemStack proto, int amount) {
+	static void insertInto(Container c, ItemStack proto, int amount) {
 		int max = Math.min(proto.getMaxStackSize(), c.getMaxStackSize());
 		int left = amount;
 		for (int i = 0; i < c.getContainerSize() && left > 0; i++) {
@@ -485,5 +550,8 @@ public class BuyMenu extends ChestMenu {
 		/** Quick Buyer: the box that receives everything bought (null = normal shop). */
 		ServerLevel boxLevel = null;
 		BlockPos boxPos = null;
+		/** Auto Buy Chest being set up (null = normal shop). */
+		ServerLevel selectLevel = null;
+		BlockPos selectPos = null;
 	}
 }

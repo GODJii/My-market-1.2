@@ -100,6 +100,7 @@ public final class Prices {
 		insertGodPickaxe();
 		insertQuickSeller();
 		insertQuickBuyer();
+		insertAutoBuyChest();
 		MyMarketMod.LOGGER.info("My Market: {} priced items, {} shop entries, {} categories",
 				SELL.size(), ALL.size(), CATEGORIES.size());
 	}
@@ -230,6 +231,33 @@ public final class Prices {
 		int j = indexOfQuickSeller(ALL);
 		if (j >= 0) ALL.add(j + 1, qb);
 		else ALL.add(qb);
+	}
+
+	/** Puts the Auto Buy Chest right after the Quick Buyer (same category). */
+	private static void insertAutoBuyChest() {
+		Entry ab = new Entry(AutoBuyChest.create(), AutoBuyChest.VALUE,
+				"auto buy chest autobuy automatic refill production farm");
+		boolean placed = false;
+		for (Category c : CATEGORIES) {
+			int i = indexOfQuickBuyer(c.entries());
+			if (i >= 0) {
+				c.entries().add(i + 1, ab);
+				placed = true;
+				break;
+			}
+		}
+		if (!placed && !CATEGORIES.isEmpty()) CATEGORIES.get(0).entries().add(ab);
+
+		int j = indexOfQuickBuyer(ALL);
+		if (j >= 0) ALL.add(j + 1, ab);
+		else ALL.add(ab);
+	}
+
+	private static int indexOfQuickBuyer(List<Entry> list) {
+		for (int i = 0; i < list.size(); i++) {
+			if (QuickBuyer.isQuickBuyer(list.get(i).stack())) return i;
+		}
+		return -1;
 	}
 
 	private static int indexOfQuickSeller(List<Entry> list) {
@@ -369,6 +397,7 @@ public final class Prices {
 		if (GodPickaxe.isGod(stack)) return godValue();
 		if (QuickSeller.isQuickSeller(stack)) return QuickSeller.VALUE;
 		if (QuickBuyer.isQuickBuyer(stack)) return QuickBuyer.VALUE;
+		if (AutoBuyChest.isAutoChest(stack)) return AutoBuyChest.VALUE;
 		Item item = stack.getItem();
 		if (item == Items.ENCHANTED_BOOK) {
 			ItemEnchantments en = stack.get(DataComponents.STORED_ENCHANTMENTS);

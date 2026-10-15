@@ -18,6 +18,7 @@ public class MyMarketMod implements ModInitializer {
 		GodPickaxe.init();
 		QuickSeller.init();
 		QuickBuyer.init();
+		AutoBuyChest.init();
 		CommandRegistrationCallback.EVENT.register(MarketCommands::register);
 		LOGGER.info("My Market loaded");
 	}
