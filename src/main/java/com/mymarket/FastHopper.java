@@ -55,7 +55,7 @@ import java.util.Set;
 public final class FastHopper {
 	public static final String TAG = "mymarket_fast_hopper";
 	/** Base value. The shop price is 2x this = 1,000. */
-	public static final long VALUE = 500L;
+	public static final long VALUE = 10_000L;
 
 	/** Items moved (in and out) per tick. */
 	private static int itemsPerTick = 8;
