@@ -59,8 +59,8 @@ import java.util.UUID;
  */
 public final class AutoBuyChest {
 	public static final String TAG = "mymarket_auto_buy_chest";
-	/** Base value. The shop price is 2x this = 15,000,000. */
-	public static final long VALUE = 7_500_000L;
+	/** Base value. The shop price is 2x this = 50,000,000. */
+	public static final long VALUE = 25_000_000L;
 
 	// ---- settings (config/mymarket_autobuy.json, created on first run)
 	/** Seconds between two refills. */
